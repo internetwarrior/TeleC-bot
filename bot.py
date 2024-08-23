@@ -25,6 +25,7 @@ Improve th post
 Lang targets:
 Russian-Ru,
 Kyrgyzstan-Kg
+put some tages from key words: Adress/boys/girls/cityparts/family/some keyword. expample: #девушки #подселение
 Choose between based by context and be carefully!:
 - 🟡Ищу квартиру🟡
 - 🟢Сдаю в аренду🟢
@@ -42,6 +43,10 @@ Please format the response as follows, ensuring each piece of information is on 
 📍Район:\n{info_here}\n
 📝Описание:\n{info_here and other infos}\n
 📞Контакты:\n{info_here_if_so}\n
+
+\n
+tags:
+
 """
 
 
