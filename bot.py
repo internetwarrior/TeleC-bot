@@ -14,6 +14,11 @@ MODEL = "gpt-3.5-turbo"
 PROVIDER = g4f.Provider.You
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
+#my_chat_id = -1001900713107
+my_chat_id = -1001958494022
+
+
+
 
 system_content = """
 Rules:
@@ -26,16 +31,13 @@ Lang targets:
 Russian-Ru,
 Kyrgyzstan-Kg
 put some tages from key words: Adress/boys/girls/cityparts/family/some keyword. expample: #девушки #подселение
-Choose between based by context and be carefully!:
-- 🟡Ищу квартиру🟡
-- 🟢Сдаю в аренду🟢
-If message is not realated to "По аренды и сдачи квартир / жилье" - send a pure message   "False"
+If message is not realated to "сдачи квартир / жилье" - send a pure message   "False"
 if the price has nnot detected, put "Договор"
 """
 example ="""
 Instance:
 
-🟡Ищу квартиру🟡 || 🟢Сдаю в аренду🟢
+🟢Сдаю в аренду🟢
 
 Please format the response as follows, ensuring each piece of information is on a new line:
 
@@ -48,11 +50,38 @@ Please format the response as follows, ensuring each piece of information is on 
 tags:
 
 """
+rules_ai = """
+rules:
+No commands
+no parse mode! <- this is important
+send me python object,dictinary
+also rate  this in 10. if structure quite good:10 othervise, your own by spell, scrupture, and by fields
+"""
 
+
+example_a = """
+this is a instance:
+🏠Цена:\n{info_here}\n
+📍Район:\n{info_here}\n
+📝Описание:\n{info_here and other infos}\n
+📞Контакты:\n{info_here_if_so}\n
+"""
+
+ai_text =[
+{"role": "user","content": f"Будешь помогать улучшать посты"},
+{"role": "user","content": f"Правила:{rules_ai}"},
+{"role": "user","content": f"{example_a}"},
+
+{
+  "role": "assistant",
+  "content": "Вот шаги, которые я выполнял для улучшения и форматирования поста:\n\n1. **Получение исходного текста**: \n   - Получил текст объявления от пользователя.\n\n2. **Анализ текста**:\n   - Определил ключевые элементы поста: цена, район, описание, контакты.\n\n3. **Форматирование**:\n   - Разделил текст на логические блоки: цена, район, описание, контакты.\n   - Добавил разделительные пробелы и эмодзи для улучшения визуальной структуры.\n\n4. **Оптимизация формулировок**:\n   - Упростил и улучшил текст, чтобы он был более читабельным и понятным.\n\n5. **Создание JSON-структуры**:\n   - Форматировал текст в структуру JSON, объединив информацию под одним ключом \"post\".\n\n6. **Форматирование для передачи**:\n   - Убедился, что JSON-структура содержит текст в виде строки с правильными разделителями.\n\n**Итоговый пример JSON-объекта:**\n\n{\n rate:★ ?/10  \"post\": \"🏠 Цена: Цену тут\\n\\n📍 Район: Район тут\\n\\n📝 Описание: Описание тут.\\n\\n📞 Контакты: Информация тут\"\n}"
+},
+{"role": "user","content": f"Запомни! Без всяких комментариев"},
+]
 
 
 client_op = Client()
-
+client_help = Client()
 
 
 
@@ -79,7 +108,6 @@ async def generate(user_content):
  
     result = types.InlineQueryResultArticle(
                 id='2',
-               
                 title="Нажмите сюда",
                 description=f"{generated_text}",
                 input_message_content=types.InputTextMessageContent(
@@ -88,7 +116,6 @@ async def generate(user_content):
 ),
 )
     return generated_text
-        
 
 @dp.inline_handler()
 async def inline_youtube_handler(query: types.InlineQuery):
@@ -115,11 +142,107 @@ async def inline_youtube_handler(query: types.InlineQuery):
 
 
 
+m_messages = []
+async def verify_ai(text):
+    result = None 
+    global MODEL,PROVIDER,rules_ai, example_a, ai_text
+    instance = ai_text
+    instance.append({"role": "user","content": f"{text}"})
+    response = client_help.chat.completions.create(
+    model=MODEL,
+    provider =PROVIDER,
+    messages = instance,)
+    result = response.choices[0].message.content
+    data = result[8:len(result)-4]
+    # my ai check code here
+    return data
+
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+
+@dp.callback_query_handler(lambda call: True)
+async def handle_callback(call: CallbackQuery):
+    global m_messages,posts
+    if call.message:
+       if call.data.startswith("done"):
+          await asyncio.sleep(10)
+          for post in posts:
+              if post.get(call.message.message_id) == post['id']:
+                 print(post)
+                 break
+              await bot.edit_message_text('Ok',call.chat.id,call.message_id)
 
 
+import json
 
+posts = []
 
+async def check_message(message, chat_id):
+    global posts
+    the_text = message.text
+    the_message_id = message.message_id
+    global m_messages
+    reply_message = await message.reply('Оцениваем...',disable_notification=True,)
+    # First verification
+    text_ai = await verify_ai(the_text)
+    verify_markup = InlineKeyboardMarkup()
+    verify_button = InlineKeyboardButton("А, что лучшее?", callback_data=f'done_{the_message_id}')
+    verify_markup.add(verify_button)
+    posts.append({f'post':json.loads(text_ai)['post'],'id':reply_message.message_id,})
+    print(posts)
+    if text_ai == 'True':
+        # If the message is fine, delete the "checking" reply
+        await bot.delete_message(chat_id, reply_message.message_id)
+    else:
+        # If the message needs correction, notify the user
+        await bot.edit_message_text(f"Meta rate: \n\n{json.loads(text_ai)['rate']}", 
+                                    chat_id,
+                                    reply_message.message_id,
+                                    parse_mode="Markdown",
+                                    reply_markup=verify_markup,
+                                    )
+        
+        # Fetch the original message again (simulate delay)
+        m_messages.append(the_message_id)
+        # Wait for 30 seconds before second verification
+#        await asyncio.sleep(25)  # Replaces threading with asyncio sleep
+#        await bot.delete_message(chat_id,reply_message.message_id)
 
+async def is_admin_or_creator(chat_id: int, user_id: int) -> bool:
+    """
+    Universal function to check if the user is an admin or creator in the chat.
+    """
+    # Get the chat member details
+    chat_member = await bot.get_chat_member(chat_id, user_id)
+    
+    # Check if the user is an administrator or creator
+    return chat_member.status in ['administrator', 'creator']
+
+"""
+@dp.edited_message_handler(content_types=types.ContentType.TEXT)
+async def handle_edited_message(edited_message: types.Message):
+    if await is_admin_or_creator(edited_message.chat.id,edited_message.from_user.id):
+       return 
+    global my_chat_id,m_messages
+    message_id = edited_message.message_id
+    new_text = edited_message.text
+    if edited_message.chat.id == my_chat_id:
+       response = await verify_ai(edited_message)
+       print(response)
+       if response == "True":
+          m_messages.remove(edited_message.message_id)
+    return
+"""
+
+@dp.message_handler(content_types=types.ContentType.TEXT)
+async def handle_message(message: types.Message):
+    if await is_admin_or_creator(message.chat.id,message.from_user.id):
+       return
+    global my_chat_id,m_messages
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    text = message.text
+    if chat_id == my_chat_id:
+       await check_message(message,chat_id)
 
 async def send_message(chat_id: int, text: str):
     await bot.send_message(chat_id, text)
